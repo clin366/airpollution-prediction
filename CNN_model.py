@@ -69,7 +69,7 @@ def keras_cnn_model(seq_length = 5, embedding_dim = 5, first_ksize = 2):
     model.compile(loss='binary_crossentropy', optimizer=Adam(), metrics=['accuracy'])
     return model
 
-def generate_feature_embeddings(X_train, word_embeddings):
+def generate_feature_embeddings(X_train, word_embeddings, weighted = False):
     all_columns = list(X_train.columns)
     embed_keys = list(word_embeddings.keys())
     terms_column = [i for i in all_columns if i.lower() in embed_keys]
@@ -84,7 +84,11 @@ def generate_feature_embeddings(X_train, word_embeddings):
         for i in terms_column:
             weights.append(day_search[i])
 
-        weights_sum = sum(weights)
+        if weighted:
+            weights_sum = sum(weights)
+        else:
+            weights_sum = 1.0
+
         for i in range(len(terms_column)):
             word = terms_column[i].lower()
             word_weight = weights[i]
@@ -95,10 +99,10 @@ def generate_feature_embeddings(X_train, word_embeddings):
         feature_embeddings.append(feature_embedding)
     return np.array(feature_embeddings)
 
-def generate_one_hot_embedding(embedding_dict_path, X_concat_frames):
+def generate_one_hot_embedding(embedding_dict_path, X_concat_frames, weighted = False):
     with open(embedding_dict_path, 'rb') as handle:
         word_embeddings = pickle.load(handle)
-    feature_embeddings = generate_feature_embeddings(X_concat_frames, word_embeddings)
+    feature_embeddings = generate_feature_embeddings(X_concat_frames, word_embeddings, weighted = weighted)
     return feature_embeddings
 
 def run_keras_model(model, input_embedding, y_class, train_len, valid_len, test_len):
@@ -223,12 +227,16 @@ def main(file_in, file_out):
                         else:
                             embedding_dict_path = './res/one_hot_embeddings.pkl'
                             X_concat_frames = pd.concat([X_train, X_valid, X_test])
-                            feature_embeddings = generate_one_hot_embedding(embedding_dict_path, X_concat_frames)
+                            feature_embeddings = generate_one_hot_embedding(embedding_dict_path, X_concat_frames, weighted = False)
+                            # normalize one-hot feature_embeddings
+                            feature_embeddings -= np.mean(feature_embeddings, axis = 0) # zero-center
+                            feature_embeddings /= np.std(feature_embeddings, axis = 0) # normalize
+
                             if input_features == 'one-hot-encoding+':
                                 x_train_concat = np.concatenate((supervised_values, feature_embeddings), axis=1)
                             else:
                                 glove_dict_path = './res/glove_embeddings.pkl'
-                                glove_feature_embeddings = generate_one_hot_embedding(glove_dict_path, X_concat_frames)
+                                glove_feature_embeddings = generate_one_hot_embedding(glove_dict_path, X_concat_frames, weighted = True)
                                 x_train_concat = np.concatenate((supervised_values, feature_embeddings, glove_feature_embeddings), axis=1)
 
                         input_embedding = generate_input_sequence(x_train_concat, seq_length = seq_length)
