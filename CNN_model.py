@@ -84,13 +84,13 @@ def generate_feature_embeddings(X_train, word_embeddings):
         for i in terms_column:
             weights.append(day_search[i])
 
-        # weights_sum = sum(weights)
+        weights_sum = sum(weights)
         for i in range(len(terms_column)):
             word = terms_column[i].lower()
             word_weight = weights[i]
             word_embedding = np.array(word_embeddings[word])
-            # feature_embedding = feature_embedding + word_embedding * (word_weight/weights_sum)
-            feature_embedding = feature_embedding + word_embedding * word_weight
+            feature_embedding = feature_embedding + word_embedding * (word_weight/weights_sum)
+            # feature_embedding = feature_embedding + word_embedding * word_weight
 
         feature_embeddings.append(feature_embedding)
     return np.array(feature_embeddings)
@@ -212,7 +212,10 @@ def main(file_in, file_out):
                     supervised_values = timeseries_to_supervised(raw_values, lag = lag_days)
                     # normalize to 0 to 1
                     # supervised_values = supervised_values/supervised_values.max()
-
+                    # normalize supervised_values
+                    supervised_values -= np.mean(supervised_values, axis = 0) # zero-center
+                    supervised_values /= np.std(supervised_values, axis = 0) # normalize
+                        
                     for input_features in ['pollution_val', 'one-hot-encoding+', 'glove-embedding+']:
                         if input_features == 'pollution_val':
                             x_train_concat = supervised_values
@@ -229,8 +232,8 @@ def main(file_in, file_out):
                                 x_train_concat = np.concatenate((supervised_values, feature_embeddings, glove_feature_embeddings), axis=1)
 
                         input_embedding = generate_input_sequence(x_train_concat, seq_length = seq_length)
-                        input_embedding -= np.mean(input_embedding, axis = 0) # zero-center
-                        input_embedding /= np.std(input_embedding, axis = 0) # normalize
+                        # input_embedding -= np.mean(input_embedding, axis = 0) # zero-center
+                        # input_embedding /= np.std(input_embedding, axis = 0) # normalize
 
                         embedding_dim = input_embedding.shape[2]
                         y_class = [1 if i>pollution_value else 0 for i in raw_values]
