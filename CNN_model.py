@@ -22,7 +22,7 @@ python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms
 python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_seq3.csv
 
 python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_glove.csv
-python3 CNN_model.py -f res/Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_glove_noAvgNorm.xls
+python3 CNN_model.py -f ./res/Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_glove_noAvgNorm.xls
 """
 
 # frame a sequence as a supervised learning problem
@@ -221,13 +221,13 @@ def main(file_in, file_out):
                             x_train_concat = supervised_values
                             # input_embedding = generate_input_sequence(supervised_values, seq_length = seq_length)
                         else:
-                            embedding_dict_path = './bert-embedding/one_hot_embeddings.pkl'
+                            embedding_dict_path = './res/one_hot_embeddings.pkl'
                             X_concat_frames = pd.concat([X_train, X_valid, X_test])
                             feature_embeddings = generate_one_hot_embedding(embedding_dict_path, X_concat_frames)
                             if input_features == 'one-hot-encoding+':
                                 x_train_concat = np.concatenate((supervised_values, feature_embeddings), axis=1)
                             else:
-                                glove_dict_path = './glove-embedding/glove_embeddings.pkl'
+                                glove_dict_path = './res/glove_embeddings.pkl'
                                 glove_feature_embeddings = generate_one_hot_embedding(glove_dict_path, X_concat_frames)
                                 x_train_concat = np.concatenate((supervised_values, feature_embeddings, glove_feature_embeddings), axis=1)
 
