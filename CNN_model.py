@@ -1,0 +1,264 @@
+import numpy as np
+import pandas as pd
+from keras.layers import Input
+from keras.regularizers import l2
+from keras.layers import Dense,concatenate,Dropout,Conv1D,Flatten,MaxPooling1D
+from keras.models import Model,model_from_json
+from keras.optimizers import Adam
+from keras.utils import np_utils
+from keras.callbacks import EarlyStopping
+from keras.callbacks import ModelCheckpoint
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, auc, accuracy_score, f1_score 
+from dataPreprocess import DataSplit
+import pickle
+import argparse
+import xlwt
+
+"""
+Command line: 
+python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res.csv
+
+python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_seq3.csv
+
+python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_glove.csv
+python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_glove_noAvgNorm.xls
+"""
+
+# frame a sequence as a supervised learning problem
+def timeseries_to_supervised(data, lag=1):
+    df = pd.DataFrame(data)
+    columns = [df.shift(i) for i in range(1, lag+1)]
+    # columns.append(df)
+    df = pd.concat(columns, axis=1)
+    df.fillna(0, inplace=True)
+    df = np.array(df)
+    return df
+
+def generate_input_sequence(supervised_values, seq_length = 5):
+    embedding_dim = supervised_values.shape[1]
+    na_vec = np.array([0. for i in range(embedding_dim)])
+    input_embedding = []
+    for i in range(len(supervised_values)):
+        input_series = []
+        for days_index in range(i-seq_length+1, i+1):
+            if days_index >= 0:
+                day_embedding = supervised_values[days_index]
+            else:
+                day_embedding = na_vec.copy()
+
+            input_series.append(day_embedding)
+        input_embedding.append(np.array(input_series))
+    input_embedding = np.array(input_embedding)
+    return input_embedding
+
+def keras_cnn_model(seq_length = 5, embedding_dim = 5, first_ksize = 2):
+    # parameters of CNN network
+    reg = l2(0.08)
+    # first_ksize = 2
+
+    # model structure 
+    input1 = Input(shape=(seq_length, embedding_dim))
+
+    first_kernel = Conv1D(8, kernel_size = first_ksize, strides = 1, padding='valid', activation = 'relu')(input1)
+    first_kernel = MaxPooling1D(pool_size=(seq_length-first_ksize+1), strides=(1), padding='valid')(first_kernel)
+    first_dense = Flatten()(first_kernel)
+    output = Dense(1,activation='sigmoid', activity_regularizer=reg)(first_dense)
+
+    model = Model(inputs=input1, outputs=output)
+    model.compile(loss='binary_crossentropy', optimizer=Adam(), metrics=['accuracy'])
+    return model
+
+def generate_feature_embeddings(X_train, word_embeddings):
+    all_columns = list(X_train.columns)
+    embed_keys = list(word_embeddings.keys())
+    terms_column = [i for i in all_columns if i.lower() in embed_keys]
+    # terms_column = list(X_train.columns)
+    feature_embeddings = []
+    one_hot_dim = len(word_embeddings['ozone'])
+
+    for i in range(len(X_train)):
+        feature_embedding = np.array([0. for i in range(0, one_hot_dim)])
+        day_search = X_train.iloc[i,:]
+        weights = []
+        for i in terms_column:
+            weights.append(day_search[i])
+
+        # weights_sum = sum(weights)
+        for i in range(len(terms_column)):
+            word = terms_column[i].lower()
+            word_weight = weights[i]
+            word_embedding = np.array(word_embeddings[word])
+            # feature_embedding = feature_embedding + word_embedding * (word_weight/weights_sum)
+            feature_embedding = feature_embedding + word_embedding * word_weight
+
+        feature_embeddings.append(feature_embedding)
+    return np.array(feature_embeddings)
+
+def generate_one_hot_embedding(embedding_dict_path, X_concat_frames):
+    with open(embedding_dict_path, 'rb') as handle:
+        word_embeddings = pickle.load(handle)
+    feature_embeddings = generate_feature_embeddings(X_concat_frames, word_embeddings)
+    return feature_embeddings
+
+def run_keras_model(model, input_embedding, y_class, train_len, valid_len, test_len):
+    # split data into train and test-sets
+    x_train, x_valid, x_test = input_embedding[0:train_len], input_embedding[train_len:train_len+valid_len], \
+                            input_embedding[train_len+valid_len:]
+    y_train, y_valid, y_test  = y_class[0:train_len], y_class[train_len:train_len+valid_len], \
+                            y_class[train_len+valid_len:]
+
+    # patient early stopping
+    es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=50)
+    # calculate the weights
+    (_, train_count) = np.unique(y_train, return_counts=True)
+    (_, valid_count) = np.unique(y_valid, return_counts=True)
+    # sum_weights = float(train_count[1] + valid_count[1]) + float(train_count[0] + valid_count[0])
+
+    class_weight = {0: float(train_count[1] + valid_count[1]), \
+                    1: float(train_count[0] + valid_count[0])}
+
+    history = model.fit(x_train, y_train, batch_size = 16, epochs = 1000, validation_data = (x_valid, y_valid), class_weight = class_weight, verbose=1, callbacks=[es])
+    best_epoch = len(history.epoch)
+    model.fit(x_valid, y_valid, batch_size = 16, epochs = best_epoch,class_weight = class_weight, verbose=1)
+    pred = model.predict(x_test)
+    pred_class = [0 if i < 0.5 else 1 for i in pred]
+
+    # evaluation results
+    accuracy = accuracy_score(y_test, pred_class)
+    f1_value = f1_score(y_test, pred_class)
+    fpr,tpr,threshold = roc_curve(y_test, pred) 
+    auc_value = auc(fpr,tpr) 
+    return accuracy, f1_value, auc_value
+    
+
+
+
+def main(file_in, file_out):
+    # file_in = '../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv'
+    # air_data_raw = readData(file_in)
+
+    # create an excel book
+    book = xlwt.Workbook() 
+
+    parameters = []
+    for lag_days in [3, 5, 7]:
+        for kernel_size in range(2, lag_days):
+            for pollution_value in [40, 50, 60, 70, 80]:
+                parameters.append((lag_days, kernel_size, pollution_value))
+
+    '''============Summary: 2009 90==============
+    no polluted days in training data
+    '''
+
+    # for lag_days in [3]:
+    #     for kernel_size in range(2, 3):
+    #         for pollution_value in [80]:
+    #             parameters.append((lag_days, kernel_size, pollution_value))
+
+    for i in range(len(parameters)):
+        lag_days, kernel_size, pollution_value = parameters[i]
+        seq_length = lag_days
+
+        sheet1 = book.add_sheet('model' + str(i))
+        row_index = 0
+        col_index = 0
+        
+
+        sheet1.write(row_index,col_index,'Input_Features') 
+        col_index = col_index + 1
+        sheet1.write(row_index,col_index,'Accuracy') 
+        col_index = col_index + 1
+        sheet1.write(row_index,col_index, 'F1_score')
+        col_index = col_index + 1
+        sheet1.write(row_index,col_index, 'AUC_val')
+        col_index = col_index + 1
+        sheet1.write(row_index,col_index+2, 'CNN: ' + str(parameters[i]))
+        col_index=0
+        row_index = row_index + 1
+
+        # with open(file_out, 'w') as fo:
+        # fo.write('Input_Features'+',' + 'Accuracy'+ ',' + 'F1_score' + ',' + 'AUC_val' + '\n')
+        for season in ['summer']:
+        # for season in ['summer', 'winter']:
+            sheet1.write(row_index, col_index, "============" + season + "=============")
+            row_index = row_index + 1
+            # fo.write("============" + season + "============="+ '\n')
+            # for final_year in [2009,2010,2011,2012,2013]:
+            for final_year in [2009,2010,2011,2012]:
+            # for final_year in [2009]:
+                sheet1.write(row_index, col_index, 'Final year: ' + str(final_year))
+                row_index = row_index + 1
+                # fo.write('Final year: ' + str(final_year) + '\n')
+                # air_data = selectData(air_data_raw.copy(), season = season, final_year=final_year)
+                for shift_days in [0]:
+                    # fo.write('Shift days: ' + str(shift_days)+ '\n')
+                    print("============Summary: " + str(final_year) + ' ' + str(pollution_value) + '==============' )
+                    single_feature = False
+                    data_split = DataSplit(file_path = file_in, season = season, final_year = final_year)
+                    X_train, X_valid, X_test, y_train, y_valid, y_test = data_split.generateTrainTest()
+                    train_len = len(y_train)
+                    valid_len = len(y_valid)
+                    test_len = len(y_test)
+
+                    # lag_days = 3
+                    # seq_length = 3
+                    # kernel_size = 2
+                    # pollution_value = 50
+
+                    raw_values = np.concatenate((y_train, y_valid, y_test), axis=0)
+                    # transform data to be supervised learning
+                    # supervised_values = timeseries_to_supervised(raw_values, 5)
+                    supervised_values = timeseries_to_supervised(raw_values, lag = lag_days)
+                    # normalize to 0 to 1
+                    # supervised_values = supervised_values/supervised_values.max()
+
+                    for input_features in ['pollution_val', 'one-hot-encoding+', 'glove-embedding+']:
+                        if input_features == 'pollution_val':
+                            x_train_concat = supervised_values
+                            # input_embedding = generate_input_sequence(supervised_values, seq_length = seq_length)
+                        else:
+                            embedding_dict_path = './bert-embedding/one_hot_embeddings.pkl'
+                            X_concat_frames = pd.concat([X_train, X_valid, X_test])
+                            feature_embeddings = generate_one_hot_embedding(embedding_dict_path, X_concat_frames)
+                            if input_features == 'one-hot-encoding+':
+                                x_train_concat = np.concatenate((supervised_values, feature_embeddings), axis=1)
+                            else:
+                                glove_dict_path = './glove-embedding/glove_embeddings.pkl'
+                                glove_feature_embeddings = generate_one_hot_embedding(glove_dict_path, X_concat_frames)
+                                x_train_concat = np.concatenate((supervised_values, feature_embeddings, glove_feature_embeddings), axis=1)
+
+                        input_embedding = generate_input_sequence(x_train_concat, seq_length = seq_length)
+                        input_embedding -= np.mean(input_embedding, axis = 0) # zero-center
+                        input_embedding /= np.std(input_embedding, axis = 0) # normalize
+
+                        embedding_dim = input_embedding.shape[2]
+                        y_class = [1 if i>pollution_value else 0 for i in raw_values]
+                        # y_class = [1 if i>70 else 0 for i in raw_values]
+
+                        # model = keras_cnn_model()
+                        model = keras_cnn_model(seq_length = seq_length, embedding_dim = embedding_dim, first_ksize = kernel_size)
+                        accuracy, f1_value, auc_value = run_keras_model(model, input_embedding, y_class, train_len, valid_len, test_len)
+                        sheet1.write(row_index, col_index, input_features)
+                        col_index = col_index + 1
+                        sheet1.write(row_index, col_index, str(accuracy))
+                        col_index = col_index + 1
+                        sheet1.write(row_index, col_index,  str(f1_value))
+                        col_index = col_index + 1
+                        sheet1.write(row_index, col_index,  str(auc_value))
+                        col_index = 0
+                        row_index = row_index + 1
+                        # fo.write(input_features + ',' + str(accuracy) +',' + str(f1_value) + ',' + str(auc_value)+ '\n')
+    book.save(file_out)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Plot ROC-AUC of air pollution prediction.')
+    # Required file path
+    parser.add_argument('-f','--file', type=str,
+                    help='Path to the air pollution data')
+    parser.add_argument('-fo','--file_out', type=str,
+                    help='Path to the CSV stat data')
+    args = parser.parse_args()
+    if args.file:
+        main(args.file, args.file_out)
+    else:
+        print("Input file path:-f")
