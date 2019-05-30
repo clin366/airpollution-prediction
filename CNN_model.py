@@ -22,7 +22,7 @@ python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms
 python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_seq3.csv
 
 python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_glove.csv
-python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_glove_noAvgNorm.xls
+python3 CNN_model.py -f res/Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_glove_noAvgNorm.xls
 """
 
 # frame a sequence as a supervised learning problem
