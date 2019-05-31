@@ -17,12 +17,8 @@ import xlwt
 
 """
 Command line: 
-python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res.csv
-
-python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_seq3.csv
-
-python3 CNN_model.py -f ../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_glove.csv
 python3 CNN_model.py -f ./res/Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_glove_noAvgNorm.xls
+
 """
 
 # frame a sequence as a supervised learning problem
@@ -135,7 +131,17 @@ def run_keras_model(model, input_embedding, y_class, train_len, valid_len, test_
     auc_value = auc(fpr,tpr) 
     return accuracy, f1_value, auc_value
     
-
+def generate_search_embedding(X_concat_frames, representation = 'one-hot'):
+    if representation == 'one-hot' :
+        embedding_dict_path = './res/one_hot_embeddings.pkl'
+        feature_embeddings = generate_one_hot_embedding(embedding_dict_path, X_concat_frames, weighted = False)
+        feature_embeddings -= np.mean(feature_embeddings, axis = 0) # zero-center
+        feature_embeddings /= np.std(feature_embeddings, axis = 0) # normalize
+        return feature_embeddings
+    elif representation == 'glove':
+        glove_dict_path = './res/glove_embeddings.pkl'
+        glove_feature_embeddings = generate_one_hot_embedding(glove_dict_path, X_concat_frames, weighted = True)
+        return glove_feature_embeddings
 
 
 def main(file_in, file_out):
@@ -220,24 +226,20 @@ def main(file_in, file_out):
                     supervised_values -= np.mean(supervised_values, axis = 0) # zero-center
                     supervised_values /= np.std(supervised_values, axis = 0) # normalize
                         
-                    for input_features in ['pollution_val', 'one-hot-encoding+', 'glove-embedding+']:
+                    # for input_features in ['pollution_val', 'one-hot-encoding+', 'glove-embedding+']:
+                    for input_features in ['one-hot-encoding+', 'glove-embedding+']:
                         if input_features == 'pollution_val':
                             x_train_concat = supervised_values
-                            # input_embedding = generate_input_sequence(supervised_values, seq_length = seq_length)
                         else:
-                            embedding_dict_path = './res/one_hot_embeddings.pkl'
                             X_concat_frames = pd.concat([X_train, X_valid, X_test])
-                            feature_embeddings = generate_one_hot_embedding(embedding_dict_path, X_concat_frames, weighted = False)
-                            # normalize one-hot feature_embeddings
-                            feature_embeddings -= np.mean(feature_embeddings, axis = 0) # zero-center
-                            feature_embeddings /= np.std(feature_embeddings, axis = 0) # normalize
-
+                            feature_embeddings = generate_search_embedding(X_concat_frames, representation = 'one-hot')
                             if input_features == 'one-hot-encoding+':
-                                x_train_concat = np.concatenate((supervised_values, feature_embeddings), axis=1)
+                                # x_train_concat = np.concatenate((supervised_values, feature_embeddings), axis=1)
+                                x_train_concat = feature_embeddings.copy()
                             else:
-                                glove_dict_path = './res/glove_embeddings.pkl'
-                                glove_feature_embeddings = generate_one_hot_embedding(glove_dict_path, X_concat_frames, weighted = True)
-                                x_train_concat = np.concatenate((supervised_values, feature_embeddings, glove_feature_embeddings), axis=1)
+                                glove_feature_embeddings = generate_search_embedding(X_concat_frames, representation = 'glove')
+                                # x_train_concat = np.concatenate((supervised_values, feature_embeddings, glove_feature_embeddings), axis=1)
+                                x_train_concat = np.concatenate((feature_embeddings, glove_feature_embeddings), axis=1)
 
                         input_embedding = generate_input_sequence(x_train_concat, seq_length = seq_length)
                         # input_embedding -= np.mean(input_embedding, axis = 0) # zero-center
