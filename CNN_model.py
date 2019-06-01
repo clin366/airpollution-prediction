@@ -17,7 +17,7 @@ import xlwt
 
 """
 Command line: 
-python3 CNN_model.py -f ./res/Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv -fo CNN_res_glove_noAvgNorm.xls
+python3 CNN_model.py -f ./res/keywords_data_rescaled_joined.csv -fo CNN_res_glove_summary.xls
 
 """
 
