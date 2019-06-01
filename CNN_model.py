@@ -231,6 +231,7 @@ def main(file_in, file_out):
                         for input_features in ['one-hot-encoding+', 'glove-embedding+']:
                             if with_pollution_val == 'pollution_val':
                                 x_train_concat = supervised_values.copy()
+                                input_features = ''
                             else:
                                 X_concat_frames = pd.concat([X_train, X_valid, X_test])
                                 feature_embeddings = generate_search_embedding(X_concat_frames, representation = 'one-hot')
@@ -266,6 +267,9 @@ def main(file_in, file_out):
                             sheet1.write(row_index, col_index,  str(auc_value))
                             col_index = 0
                             row_index = row_index + 1
+
+                            if with_pollution_val == 'pollution_val':
+                                break
                             # fo.write(input_features + ',' + str(accuracy) +',' + str(f1_value) + ',' + str(auc_value)+ '\n')
     book.save(file_out)
 if __name__ == "__main__":
