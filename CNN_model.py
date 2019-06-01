@@ -227,10 +227,10 @@ def main(file_in, file_out):
                     supervised_values /= np.std(supervised_values, axis = 0) # normalize
                         
                     # for input_features in ['pollution_val', 'one-hot-encoding+', 'glove-embedding+']:
-                    for with_pollution_val in ['with_pol_val', 'without_pol_val']:
+                    for with_pollution_val in ['pollution_val', 'with_pol_val', 'without_pol_val']:
                         for input_features in ['one-hot-encoding+', 'glove-embedding+']:
-                            if input_features == 'pollution_val':
-                                x_train_concat = supervised_values
+                            if with_pollution_val == 'pollution_val':
+                                x_train_concat = supervised_values.copy()
                             else:
                                 X_concat_frames = pd.concat([X_train, X_valid, X_test])
                                 feature_embeddings = generate_search_embedding(X_concat_frames, representation = 'one-hot')
