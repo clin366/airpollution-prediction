@@ -152,19 +152,19 @@ def main(file_in, file_out):
     book = xlwt.Workbook() 
 
     parameters = []
-#     for lag_days in [3, 5, 7]:
-#         for kernel_size in range(2, lag_days):
-#             for pollution_value in [40, 50, 60, 70, 80]:
-#                 parameters.append((lag_days, kernel_size, pollution_value))
+    for lag_days in [3, 5, 7]:
+        for kernel_size in range(2, lag_days):
+            for pollution_value in [40, 50, 60, 70, 80]:
+                parameters.append((lag_days, kernel_size, pollution_value))
 
     '''============Summary: 2009 90==============
     no polluted days in training data
     '''
 
-    for lag_days in [3]:
-        for kernel_size in range(2, 3):
-            for pollution_value in [50]:
-                parameters.append((lag_days, kernel_size, pollution_value))
+    # for lag_days in [3]:
+    #     for kernel_size in range(2, 3):
+    #         for pollution_value in [50]:
+    #             parameters.append((lag_days, kernel_size, pollution_value))
 
     for parameter_index in range(len(parameters)):
         lag_days, kernel_size, pollution_value = parameters[parameter_index]
@@ -183,7 +183,7 @@ def main(file_in, file_out):
         col_index = col_index + 1
         sheet1.write(row_index,col_index, 'AUC_val')
         col_index = col_index + 1
-        sheet1.write(row_index,col_index+2, 'CNN: ' + str(parameters[parameter_index]))
+        sheet1.write(row_index,col_index+2, 'CNN: ' + '(seq_length, kernel_size, pollution_value):' + str(parameters[parameter_index]))
         col_index=0
         row_index = row_index + 1
 
@@ -228,14 +228,14 @@ def main(file_in, file_out):
                         
                     # for input_features in ['pollution_val', 'one-hot-encoding+', 'glove-embedding+']:
                     for with_pollution_val in ['pollution_val', 'with_pol_val', 'without_pol_val']:
-                        for input_features in ['one-hot-encoding+', 'glove-embedding+']:
+                        for input_features in ['one-hot+', 'one-hot+glove+']:
                             if with_pollution_val == 'pollution_val':
                                 x_train_concat = supervised_values.copy()
                                 input_features = ''
                             else:
                                 X_concat_frames = pd.concat([X_train, X_valid, X_test])
                                 feature_embeddings = generate_search_embedding(X_concat_frames, representation = 'one-hot')
-                                if input_features == 'one-hot-encoding+':
+                                if input_features == 'one-hot+':
                                     if with_pollution_val == 'with_pol_val':
                                         x_train_concat = np.concatenate((supervised_values, feature_embeddings), axis=1)
                                     else:
