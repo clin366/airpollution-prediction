@@ -73,9 +73,9 @@ def generate_feature_embeddings(X_train, word_embeddings, weighted = False):
     feature_embeddings = []
     one_hot_dim = len(word_embeddings['ozone'])
 
-    for i in range(len(X_train)):
+    for row_index in range(len(X_train)):
         feature_embedding = np.array([0. for i in range(0, one_hot_dim)])
-        day_search = X_train.iloc[i,:]
+        day_search = X_train.iloc[row_index,:]
         weights = []
         for i in terms_column:
             weights.append(day_search[i])
@@ -166,11 +166,11 @@ def main(file_in, file_out):
     #         for pollution_value in [80]:
     #             parameters.append((lag_days, kernel_size, pollution_value))
 
-    for i in range(len(parameters)):
-        lag_days, kernel_size, pollution_value = parameters[i]
+    for parameter_index in range(len(parameters)):
+        lag_days, kernel_size, pollution_value = parameters[parameter_index]
         seq_length = lag_days
 
-        sheet1 = book.add_sheet('model' + str(i))
+        sheet1 = book.add_sheet('model' + str(parameter_index))
         row_index = 0
         col_index = 0
         
@@ -227,41 +227,46 @@ def main(file_in, file_out):
                     supervised_values /= np.std(supervised_values, axis = 0) # normalize
                         
                     # for input_features in ['pollution_val', 'one-hot-encoding+', 'glove-embedding+']:
-                    for input_features in ['one-hot-encoding+', 'glove-embedding+']:
-                        if input_features == 'pollution_val':
-                            x_train_concat = supervised_values
-                        else:
-                            X_concat_frames = pd.concat([X_train, X_valid, X_test])
-                            feature_embeddings = generate_search_embedding(X_concat_frames, representation = 'one-hot')
-                            if input_features == 'one-hot-encoding+':
-                                # x_train_concat = np.concatenate((supervised_values, feature_embeddings), axis=1)
-                                x_train_concat = feature_embeddings.copy()
+                    for with_pollution_val in ['with_pol_val', 'without_pol_val']:
+                        for input_features in ['one-hot-encoding+', 'glove-embedding+']:
+                            if input_features == 'pollution_val':
+                                x_train_concat = supervised_values
                             else:
-                                glove_feature_embeddings = generate_search_embedding(X_concat_frames, representation = 'glove')
-                                # x_train_concat = np.concatenate((supervised_values, feature_embeddings, glove_feature_embeddings), axis=1)
-                                x_train_concat = np.concatenate((feature_embeddings, glove_feature_embeddings), axis=1)
+                                X_concat_frames = pd.concat([X_train, X_valid, X_test])
+                                feature_embeddings = generate_search_embedding(X_concat_frames, representation = 'one-hot')
+                                if input_features == 'one-hot-encoding+':
+                                    if with_pollution_val == 'with_pol_val':
+                                        x_train_concat = np.concatenate((supervised_values, feature_embeddings), axis=1)
+                                    else:
+                                        x_train_concat = feature_embeddings.copy()
+                                else:
+                                    glove_feature_embeddings = generate_search_embedding(X_concat_frames, representation = 'glove')
+                                    if with_pollution_val == 'with_pol_val':
+                                        x_train_concat = np.concatenate((supervised_values, feature_embeddings, glove_feature_embeddings), axis=1)
+                                    else:
+                                        x_train_concat = np.concatenate((feature_embeddings, glove_feature_embeddings), axis=1)
 
-                        input_embedding = generate_input_sequence(x_train_concat, seq_length = seq_length)
-                        # input_embedding -= np.mean(input_embedding, axis = 0) # zero-center
-                        # input_embedding /= np.std(input_embedding, axis = 0) # normalize
+                            input_embedding = generate_input_sequence(x_train_concat, seq_length = seq_length)
+                            # input_embedding -= np.mean(input_embedding, axis = 0) # zero-center
+                            # input_embedding /= np.std(input_embedding, axis = 0) # normalize
 
-                        embedding_dim = input_embedding.shape[2]
-                        y_class = [1 if i>pollution_value else 0 for i in raw_values]
-                        # y_class = [1 if i>70 else 0 for i in raw_values]
+                            embedding_dim = input_embedding.shape[2]
+                            y_class = [1 if i>pollution_value else 0 for i in raw_values]
+                            # y_class = [1 if i>70 else 0 for i in raw_values]
 
-                        # model = keras_cnn_model()
-                        model = keras_cnn_model(seq_length = seq_length, embedding_dim = embedding_dim, first_ksize = kernel_size)
-                        accuracy, f1_value, auc_value = run_keras_model(model, input_embedding, y_class, train_len, valid_len, test_len)
-                        sheet1.write(row_index, col_index, input_features)
-                        col_index = col_index + 1
-                        sheet1.write(row_index, col_index, str(accuracy))
-                        col_index = col_index + 1
-                        sheet1.write(row_index, col_index,  str(f1_value))
-                        col_index = col_index + 1
-                        sheet1.write(row_index, col_index,  str(auc_value))
-                        col_index = 0
-                        row_index = row_index + 1
-                        # fo.write(input_features + ',' + str(accuracy) +',' + str(f1_value) + ',' + str(auc_value)+ '\n')
+                            # model = keras_cnn_model()
+                            model = keras_cnn_model(seq_length = seq_length, embedding_dim = embedding_dim, first_ksize = kernel_size)
+                            accuracy, f1_value, auc_value = run_keras_model(model, input_embedding, y_class, train_len, valid_len, test_len)
+                            sheet1.write(row_index, col_index, with_pollution_val + '+' + input_features)
+                            col_index = col_index + 1
+                            sheet1.write(row_index, col_index, str(accuracy))
+                            col_index = col_index + 1
+                            sheet1.write(row_index, col_index,  str(f1_value))
+                            col_index = col_index + 1
+                            sheet1.write(row_index, col_index,  str(auc_value))
+                            col_index = 0
+                            row_index = row_index + 1
+                            # fo.write(input_features + ',' + str(accuracy) +',' + str(f1_value) + ',' + str(auc_value)+ '\n')
     book.save(file_out)
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Plot ROC-AUC of air pollution prediction.')
