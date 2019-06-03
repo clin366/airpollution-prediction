@@ -14,6 +14,9 @@ from dataPreprocess import DataSplit
 import pickle
 import argparse
 import xlwt
+import xlrd
+import xlutils.copy
+
 
 """
 Command line: 
@@ -150,6 +153,8 @@ def main(file_in, file_out):
 
     # create an excel book
     book = xlwt.Workbook() 
+    sheet0 = book.add_sheet('first_page')
+    book.save(file_out)
 
     parameters = []
     for lag_days in [3, 5, 7]:
@@ -167,14 +172,17 @@ def main(file_in, file_out):
     #             parameters.append((lag_days, kernel_size, pollution_value))
 
     for parameter_index in range(len(parameters)):
+        data = xlrd.open_workbook(file_out)
+        ws = xlutils.copy.copy(data)
+        data.release_resources()
+        del data
         lag_days, kernel_size, pollution_value = parameters[parameter_index]
         seq_length = lag_days
 
-        sheet1 = book.add_sheet('model' + str(parameter_index))
+        sheet1 = ws.add_sheet('model' + str(parameter_index))
         row_index = 0
         col_index = 0
         
-
         sheet1.write(row_index,col_index,'Input_Features') 
         col_index = col_index + 1
         sheet1.write(row_index,col_index,'Accuracy') 
@@ -271,7 +279,9 @@ def main(file_in, file_out):
                             if with_pollution_val == 'pollution_val':
                                 break
                             # fo.write(input_features + ',' + str(accuracy) +',' + str(f1_value) + ',' + str(auc_value)+ '\n')
-    book.save(file_out)
+        ws.save(file_out)
+        del ws
+    # book.save(file_out)
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Plot ROC-AUC of air pollution prediction.')
     # Required file path
