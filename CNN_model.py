@@ -152,19 +152,19 @@ def main(file_in, file_out):
     book = xlwt.Workbook() 
 
     parameters = []
-    for lag_days in [3, 5, 7]:
-        for kernel_size in range(2, lag_days):
-            for pollution_value in [40, 50, 60, 70, 80]:
-                parameters.append((lag_days, kernel_size, pollution_value))
+#     for lag_days in [3, 5, 7]:
+#         for kernel_size in range(2, lag_days):
+#             for pollution_value in [40, 50, 60, 70, 80]:
+#                 parameters.append((lag_days, kernel_size, pollution_value))
 
     '''============Summary: 2009 90==============
     no polluted days in training data
     '''
 
-    # for lag_days in [3]:
-    #     for kernel_size in range(2, 3):
-    #         for pollution_value in [50]:
-    #             parameters.append((lag_days, kernel_size, pollution_value))
+    for lag_days in [3]:
+        for kernel_size in range(2, 3):
+            for pollution_value in [50]:
+                parameters.append((lag_days, kernel_size, pollution_value))
 
     for parameter_index in range(len(parameters)):
         lag_days, kernel_size, pollution_value = parameters[parameter_index]
