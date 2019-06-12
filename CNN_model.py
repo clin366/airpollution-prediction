@@ -22,6 +22,7 @@ import xlutils.copy
 Command line: 
 python3 CNN_model.py -f ./res/keywords_data_rescaled_joined.csv -fo CNN_res_glove_summary.xls
 python3 CNN_model.py -f ./res/keywords_data_rescaled_joined.csv -fo CNN_search_lag.xls
+python3 CNN_model.py -f ./res/keywords_data_rescaled_joined.csv -fo CNN_search_lag_pol60.xls
 
 """
 
@@ -172,7 +173,7 @@ def main(file_in, file_out):
     parameters = []
     for lag_days in [3, 5, 7]: 
         for kernel_size in range(2, lag_days):
-            for pollution_value in [70]:
+            for pollution_value in [60]:
                 for search_lag in [0, 1, 2, 3]:
                     parameters.append((lag_days, kernel_size, pollution_value, search_lag))
 
