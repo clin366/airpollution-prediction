@@ -21,6 +21,7 @@ import xlutils.copy
 """
 Command line: 
 python3 CNN_model.py -f ./res/keywords_data_rescaled_joined.csv -fo CNN_res_glove_summary.xls
+python3 CNN_model.py -f ./res/keywords_data_rescaled_joined.csv -fo CNN_search_lag.xls
 
 """
 
@@ -143,9 +144,21 @@ def generate_search_embedding(X_concat_frames, representation = 'one-hot'):
         return feature_embeddings
     elif representation == 'glove':
         glove_dict_path = './res/glove_embeddings.pkl'
-        glove_feature_embeddings = generate_one_hot_embedding(glove_dict_path, X_concat_frames, weighted = True)
+        glove_feature_embeddings = generate_one_hot_embedding(glove_dict_path, X_concat_frames, weighted = False)
+        # glove_feature_embeddings = generate_one_hot_embedding(glove_dict_path, X_concat_frames, weighted = True)
+        glove_feature_embeddings -= np.mean(glove_feature_embeddings, axis = (0,1)) # zero-center
+        glove_feature_embeddings /= np.std(glove_feature_embeddings, axis = (0,1)) # normalize
         return glove_feature_embeddings
 
+def lag_search_features(feature_embeddings, lag = 0):
+    embedding_dim = feature_embeddings.shape[1]
+    na_embedding = np.array([0. for i in range(embedding_dim)])
+    reveserse_embeddings = feature_embeddings[::-1]
+    lag_features = np.roll(reveserse_embeddings, lag, axis=0)
+    for i in range(lag):
+        lag_features[i] = na_embedding
+    lag_features = lag_features[::-1]
+    return lag_features
 
 def main(file_in, file_out):
     # file_in = '../Re__Research_on_detecting_air_pollution_related_terms_searches_/keywords_data_rescaled_joined.csv'
@@ -157,26 +170,27 @@ def main(file_in, file_out):
     book.save(file_out)
 
     parameters = []
-#     for lag_days in [3, 5, 7]: 
-#         for kernel_size in range(2, lag_days):
-#             for pollution_value in [40, 50, 60, 70, 80]:
-#                 parameters.append((lag_days, kernel_size, pollution_value))
+    for lag_days in [3, 5, 7]: 
+        for kernel_size in range(2, lag_days):
+            for pollution_value in [70]:
+                for search_lag in [0, 1, 2, 3]:
+                    parameters.append((lag_days, kernel_size, pollution_value, search_lag))
 
     '''============Summary: 2009 90==============
     no polluted days in training data
     '''
 
-    for lag_days in [7]:
-        for kernel_size in range(3, lag_days):
-            for pollution_value in [40, 50, 60, 70, 80]:
-                parameters.append((lag_days, kernel_size, pollution_value))
+    # for lag_days in [7]:
+    #     for kernel_size in range(3, lag_days):
+    #         for pollution_value in [40, 50, 60, 70, 80]:
+    #             parameters.append((lag_days, kernel_size, pollution_value))
 
     for parameter_index in range(len(parameters)):
         data = xlrd.open_workbook(file_out)
         ws = xlutils.copy.copy(data)
         data.release_resources()
         del data
-        lag_days, kernel_size, pollution_value = parameters[parameter_index]
+        lag_days, kernel_size, pollution_value, search_lag= parameters[parameter_index]
         seq_length = lag_days
 
         sheet1 = ws.add_sheet('model' + str(parameter_index))
@@ -191,7 +205,7 @@ def main(file_in, file_out):
         col_index = col_index + 1
         sheet1.write(row_index,col_index, 'AUC_val')
         col_index = col_index + 1
-        sheet1.write(row_index,col_index+2, 'CNN: ' + '(seq_length, kernel_size, pollution_value):' + str(parameters[parameter_index]))
+        sheet1.write(row_index,col_index+2, 'CNN: ' + '(seq_length, kernel_size, pollution_value, search_lag):' + str(parameters[parameter_index]))
         col_index=0
         row_index = row_index + 1
 
@@ -243,6 +257,7 @@ def main(file_in, file_out):
                             else:
                                 X_concat_frames = pd.concat([X_train, X_valid, X_test])
                                 feature_embeddings = generate_search_embedding(X_concat_frames, representation = 'one-hot')
+                                feature_embeddings = lag_search_features(feature_embeddings, lag = search_lag)
                                 if input_features == 'one-hot+':
                                     if with_pollution_val == 'with_pol_val':
                                         x_train_concat = np.concatenate((supervised_values, feature_embeddings), axis=1)
@@ -250,6 +265,7 @@ def main(file_in, file_out):
                                         x_train_concat = feature_embeddings.copy()
                                 else:
                                     glove_feature_embeddings = generate_search_embedding(X_concat_frames, representation = 'glove')
+                                    glove_feature_embeddings = lag_search_features(glove_feature_embeddings, lag = search_lag)
                                     if with_pollution_val == 'with_pol_val':
                                         x_train_concat = np.concatenate((supervised_values, feature_embeddings, glove_feature_embeddings), axis=1)
                                     else:
